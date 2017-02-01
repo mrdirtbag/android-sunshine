@@ -1,3 +1,5 @@
+Initial start from: https://github.com/udacity/ud851-Sunshine
+
 ##Rubric
 * App works on both round and square face watches.
 * App displays the current time.
