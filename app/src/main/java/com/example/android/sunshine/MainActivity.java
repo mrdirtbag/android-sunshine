@@ -17,8 +17,13 @@ package com.example.android.sunshine;
 
 import android.content.Intent;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
@@ -36,9 +41,25 @@ import com.example.android.sunshine.data.SunshinePreferences;
 import com.example.android.sunshine.data.WeatherContract;
 import com.example.android.sunshine.sync.SunshineSyncUtils;
 
+import com.example.android.sunshine.utilities.SunshineWeatherUtils;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
+import com.google.android.gms.wearable.Wearable;
+import com.google.android.gms.wearable.WearableListenerService;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 public class MainActivity extends AppCompatActivity implements
         LoaderManager.LoaderCallbacks<Cursor>,
-        ForecastAdapter.ForecastAdapterOnClickHandler {
+        ForecastAdapter.ForecastAdapterOnClickHandler,
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener {
 
     private final String TAG = MainActivity.class.getSimpleName();
 
@@ -79,6 +100,12 @@ public class MainActivity extends AppCompatActivity implements
 
     private ProgressBar mLoadingIndicator;
 
+    private GoogleApiClient mGoogleApiClient;
+
+    private static final String WEATHER_URI = "/weather";
+    private static final String TEMP_HIGH = "high";
+    private static final String TEMP_LOW = "low";
+    private static final String IMAGE_ASSET = "image";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -144,6 +171,16 @@ public class MainActivity extends AppCompatActivity implements
 
 
         showLoading();
+
+        /*
+         * init Google API Client to send data to wearable
+         */
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+        mGoogleApiClient.connect();
 
         /*
          * Ensures a loader is initialized and active. If the loader doesn't already exist, one is
@@ -239,9 +276,38 @@ public class MainActivity extends AppCompatActivity implements
         mForecastAdapter.swapCursor(data);
         if (mPosition == RecyclerView.NO_POSITION) mPosition = 0;
         mRecyclerView.smoothScrollToPosition(mPosition);
-        if (data.getCount() != 0) showWeatherDataView();
+
+        if (data.getCount() != 0) {
+            showWeatherDataView();
+        }
+
+        updateWearable(data);
+
     }
 
+
+    /**
+     * Update Wear device with weather changes.
+     */
+    public void updateWearable(Cursor data) {
+        int dataCount = data.getCount();
+        Log.e(TAG, "data count: " + dataCount);
+
+        if(dataCount != 0) {
+            data.moveToFirst();
+            double high = data.getDouble(INDEX_WEATHER_MAX_TEMP);
+            double low = data.getDouble(INDEX_WEATHER_MIN_TEMP);
+            int weatherConditionId = data.getInt(INDEX_WEATHER_CONDITION_ID);
+
+            Log.e(TAG, "weather data: High: " + SunshineWeatherUtils.formatTemperature(this, high) + "    - Low: " + SunshineWeatherUtils.formatTemperature(this, low));
+            Log.e(TAG, "weather condition_id: " + weatherConditionId);
+
+            int weatherImageId = SunshineWeatherUtils.getSmallArtResourceIdForWeatherCondition(weatherConditionId);
+            Bitmap weatherBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.ic_rain);
+
+            sendWeatherUpdate(high, low, weatherBitmap);
+        }
+    }
     /**
      * Called when a previously created loader is being reset, and thus making its data unavailable.
      * The application should at this point remove any references it has to the Loader's data.
@@ -343,4 +409,72 @@ public class MainActivity extends AppCompatActivity implements
 
         return super.onOptionsItemSelected(item);
     }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+
+    }
+
+    public void sendWeatherUpdate(double high, double low, Bitmap weatherBitmap) {
+
+        String highStr = SunshineWeatherUtils.formatTemperature(this, high);
+        String lowStr = SunshineWeatherUtils.formatTemperature(this, low);
+
+        Log.e(TAG, "High: " + highStr + " - Low:" + lowStr);
+        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create(WEATHER_URI);
+
+        putDataMapRequest.getDataMap().putString(TEMP_HIGH,highStr);
+        putDataMapRequest.getDataMap().putString(TEMP_LOW,lowStr);
+        putDataMapRequest.getDataMap().putAsset(IMAGE_ASSET, toAsset(weatherBitmap));
+
+        PutDataRequest request = putDataMapRequest.asPutDataRequest();
+        Wearable.DataApi.putDataItem(mGoogleApiClient, request)
+                .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                    @Override
+                    public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
+                        if(!dataItemResult.getStatus().isSuccess()) {
+                            Log.e(TAG,"Failed to save package for future update to wearable.");
+                        } else {
+                            Log.e(TAG,"Successfully saved package into for future update of wearable.");
+                        }
+                    }
+                });
+    }
+
+    /**
+     * From DataLayer Sample Android app.
+     *
+     * Convert Bitmap to gms Asset to tranfer to wearable.
+     * Builds an {@link com.google.android.gms.wearable.Asset}
+     * from a bitmap. Typically, your image should not exceed
+     * 320x320 and if you want to have zoom and parallax effect in your app, limit the size of your
+     * image to 640x400. Resize your image before transferring to your wearable device.
+     */
+    private static Asset toAsset(Bitmap bitmap) {
+        ByteArrayOutputStream byteStream = null;
+        try {
+            byteStream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteStream);
+            return Asset.createFromBytes(byteStream.toByteArray());
+        } finally {
+            if (null != byteStream) {
+                try {
+                    byteStream.close();
+                } catch (IOException e) {
+                    // ignore
+                }
+            }
+        }
+    }
+
 }

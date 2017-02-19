@@ -1,4 +1,4 @@
-package com.example.wear;
+package com.example.android.sunshine;
 
 import android.app.Service;
 import android.content.Intent;

@@ -8,5 +8,5 @@
     <dimen name="weather_text_size_round">25dp</dimen>
     <dimen name="digital_x_offset">15dp</dimen>
     <dimen name="digital_x_offset_round">25dp</dimen>
-    <dimen name="digital_y_offset">75dp</dimen>
+    <dimen name="digital_y_offset">65dp</dimen>
 </resources>
