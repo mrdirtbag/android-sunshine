@@ -146,7 +146,7 @@ public class WeatherListenerService extends WearableListenerService
         protected void onPostExecute(Bitmap bitmap) {
 
             if (bitmap != null) {
-                MyWatchFace.WEATHER_BITMAP = bitmap;
+                MyWatchFace.setWeatherImage(bitmap);
 
             } else {
                 Log.e(TAG, "Weather image load failed.");
