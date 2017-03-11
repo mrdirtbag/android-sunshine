@@ -3,6 +3,7 @@ package com.example.android.sunshine;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
@@ -11,6 +12,7 @@ import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -35,11 +37,6 @@ public class WeatherListenerService extends WearableListenerService
 
     private static final String TAG = "WeatherListenerService";
 
-    private static final String WEATHER_URI = "/weather";
-    private static final String TEMP_HIGH = "high";
-    private static final String TEMP_LOW = "low";
-    private static final String IMAGE_ASSET = "image";
-
     private GoogleApiClient mGoogleApiClient;
 
     @Override
@@ -52,7 +49,7 @@ public class WeatherListenerService extends WearableListenerService
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-        mGoogleApiClient.connect();
+        //mGoogleApiClient.connect();
 
     }
 
@@ -68,18 +65,19 @@ public class WeatherListenerService extends WearableListenerService
             if(dataEvent.getType() == DataEvent.TYPE_CHANGED) {
                 DataMap dataMap = DataMapItem.fromDataItem(dataEvent.getDataItem()).getDataMap();
                 String path = dataEvent.getDataItem().getUri().getPath();
-                if(path.equals(WEATHER_URI)) {
-                    MyWatchFace.HIGH = dataMap.getString(TEMP_HIGH);
-                    MyWatchFace.LOW  = dataMap.getString(TEMP_LOW);
+                if(path.equals(Utils.WEATHER_URI)) {
+
+                    Toast.makeText(this, "data received.", Toast.LENGTH_SHORT).show();
 
                     // Load image asset in background thread.
                     DataMapItem dataMapItem = DataMapItem.fromDataItem(dataEvent.getDataItem());
 
                     Asset imageAsset = dataMapItem.getDataMap()
-                            .getAsset(IMAGE_ASSET);
-                    // Loads image on background thread.
-                    new LoadBitmapAsyncTask().execute(imageAsset);
-
+                            .getAsset(Utils.IMAGE_ASSET);
+                    if(null != imageAsset) {
+                        // Loads image on background thread.
+                        new LoadBitmapAsyncTask(dataMap.getString(Utils.TEMP_HIGH), dataMap.getString(Utils.TEMP_LOW)).execute(imageAsset);
+                    }
                 }
             }
         }
@@ -109,6 +107,13 @@ public class WeatherListenerService extends WearableListenerService
      */
     private class LoadBitmapAsyncTask extends AsyncTask<Asset, Void, Bitmap> {
 
+        String mHigh;
+        String mLow;
+
+        LoadBitmapAsyncTask(String high, String low)  {
+            mHigh = high;
+            mLow = low;
+        }
 
         @Override
         protected Bitmap doInBackground(Asset... params) {
@@ -122,7 +127,7 @@ public class WeatherListenerService extends WearableListenerService
                             .blockingConnect(30, TimeUnit.SECONDS);
                     if (!connectionResult.isSuccess()) {
                         Log.e(TAG, TAG + " failed to connect to GoogleApiClient, "
-                                + "error code: " + connectionResult.getErrorCode());
+                                + "error code: " + connectionResult.getErrorCode()  + " : " +  connectionResult.getErrorMessage() + " : " + connectionResult.toString());
                         return null;
                     }
                 }
@@ -147,6 +152,17 @@ public class WeatherListenerService extends WearableListenerService
 
             if (bitmap != null) {
                 MyWatchFace.setWeatherImage(bitmap);
+                // store data in shared preferences
+                SharedPreferences prefs = getSharedPreferences(Utils.WEATHER_PREF_KEY, Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putString(Utils.TEMP_HIGH, mHigh);
+                editor.putString(Utils.TEMP_LOW, mLow);
+                editor.commit();
+
+
+                synchronized (editor) {
+                    editor.notify();
+                }
 
             } else {
                 Log.e(TAG, "Weather image load failed.");

@@ -16,6 +16,7 @@
 package com.example.android.sunshine;
 
 import android.content.Intent;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -36,6 +37,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import com.example.android.sunshine.data.SunshinePreferences;
 import com.example.android.sunshine.data.WeatherContract;
@@ -47,6 +49,8 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.MessageApi;
+import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
@@ -54,10 +58,13 @@ import com.google.android.gms.wearable.WearableListenerService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity implements
         LoaderManager.LoaderCallbacks<Cursor>,
         ForecastAdapter.ForecastAdapterOnClickHandler,
+        MessageApi.MessageListener,
+
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener {
 
@@ -106,6 +113,7 @@ public class MainActivity extends AppCompatActivity implements
     private static final String TEMP_HIGH = "high";
     private static final String TEMP_LOW = "low";
     private static final String IMAGE_ASSET = "image";
+    private static final String TEMP_TIMESTAMP = "timestamp";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -412,17 +420,21 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        Log.e(TAG, "onConnected(): Successfully connected to Google API client");
+
+        Wearable.MessageApi.addListener(mGoogleApiClient, this);
 
     }
 
     @Override
     public void onConnectionSuspended(int i) {
+        Log.e(TAG, "onConnectSuspended(): suspended with #" + i);
 
     }
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-
+        Log.e(TAG, "onConnectionFailed(): Failed with result: " + connectionResult.toString());
     }
 
     public void sendWeatherUpdate(double high, double low, Bitmap weatherBitmap) {
@@ -435,9 +447,14 @@ public class MainActivity extends AppCompatActivity implements
 
         putDataMapRequest.getDataMap().putString(TEMP_HIGH,highStr);
         putDataMapRequest.getDataMap().putString(TEMP_LOW,lowStr);
-        putDataMapRequest.getDataMap().putAsset(IMAGE_ASSET, toAsset(weatherBitmap));
+        putDataMapRequest.getDataMap().putLong(TEMP_TIMESTAMP, new Date().getTime());
 
+        if(null != weatherBitmap) {
+            putDataMapRequest.getDataMap().putAsset(IMAGE_ASSET, toAsset(weatherBitmap));
+        }
         PutDataRequest request = putDataMapRequest.asPutDataRequest();
+        request.setUrgent();  // make sure it goes to the watch right away.
+
         Wearable.DataApi.putDataItem(mGoogleApiClient, request)
                 .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
                     @Override
@@ -477,4 +494,16 @@ public class MainActivity extends AppCompatActivity implements
         }
     }
 
+    @Override
+    public void onMessageReceived(MessageEvent messageEvent) {
+        Log.e(TAG, "Message from watch: " + messageEvent.getPath());
+
+        Toast.makeText(this, "Message from watch.", Toast.LENGTH_LONG).show();
+
+        Cursor cursor = mForecastAdapter.getCursor();
+
+        // send data to wearable
+        updateWearable(cursor);
+
+    }
 }

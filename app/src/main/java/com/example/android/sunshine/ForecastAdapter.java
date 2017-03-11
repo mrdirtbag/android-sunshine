@@ -247,6 +247,15 @@ class ForecastAdapter extends RecyclerView.Adapter<ForecastAdapter.ForecastAdapt
     }
 
     /**
+     * The watch app need access to the forcast data.  This will allow the MainActivity to get to it.
+     *
+     * @return the current Cursor
+     */
+    Cursor getCursor() {
+        return mCursor;
+    }
+
+    /**
      * Swaps the cursor used by the ForecastAdapter for its weather data. This method is called by
      * MainActivity after a load has finished, as well as when the Loader responsible for loading
      * the weather data is reset. When this method is called, we assume we have a completely new
