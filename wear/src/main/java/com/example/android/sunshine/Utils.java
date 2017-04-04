@@ -1,7 +1,7 @@
 package com.example.android.sunshine;
 
 /**
- * Created by dirtbag on 3/8/17.
+ * String contants for passing messages.
  */
 
 public class Utils {

@@ -20,6 +20,7 @@ import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.wearable.watchface.CanvasWatchFaceService;
+import android.support.wearable.watchface.WatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -85,7 +86,8 @@ public class MyWatchFace extends CanvasWatchFaceService {
     public static final float WEATHER_IMAGE_SCALER_FACTOR = 0.20f;
 
     /**
-     * set method to update weather image
+     * set method to update weather image, when background loader
+     * finishes, it calls this method to update the image to be displayed.
      *
      * @param weatherBttmap
      */
@@ -163,6 +165,12 @@ public class MyWatchFace extends CanvasWatchFaceService {
         boolean mLowBitAmbient;
 
 
+        /**
+         * Here we want to setup paint objects, once.  They
+         * are then reused on each iteration of the onDraw method.
+         *
+         * @param holder
+         */
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
@@ -183,6 +191,16 @@ public class MyWatchFace extends CanvasWatchFaceService {
             mTextDegreeBoldPaint = createTextPaint(resources.getColor(R.color.digital_text));
             mTextDegreeBoldPaint.setTypeface(BOLD_TYPEFACE);
             mTextDegreeLightPaint = createTextPaint(resources.getColor(R.color.light_text));
+
+            float textSize = resources.getDimension(R.dimen.digital_text_size);
+            float dateTextSize = resources.getDimension(R.dimen.date_text_size);
+            float weatherTextSize = resources.getDimension(R.dimen.weather_text_size);
+
+            mBackgroundPaint.setTextSize(textSize);
+            mTextBoldPaint.setTextSize(textSize);
+            mTextLightPaint.setTextSize(dateTextSize);
+            mTextDegreeBoldPaint.setTextSize(weatherTextSize);
+            mTextDegreeLightPaint.setTextSize(weatherTextSize);
 
             mPaintLine = new Paint();
             mPaintLine.setColor(resources.getColor(R.color.dividing_line));
@@ -252,22 +270,6 @@ public class MyWatchFace extends CanvasWatchFaceService {
         }
 
         @Override
-        public void onApplyWindowInsets(WindowInsets insets) {
-            super.onApplyWindowInsets(insets);
-
-            Resources resources = MyWatchFace.this.getResources();
-            float textSize = resources.getDimension(R.dimen.digital_text_size);
-            float dateTextSize = resources.getDimension(R.dimen.date_text_size);
-            float weatherTextSize = resources.getDimension(R.dimen.weather_text_size);
-
-            mBackgroundPaint.setTextSize(textSize);
-            mTextBoldPaint.setTextSize(textSize);
-            mTextLightPaint.setTextSize(dateTextSize);
-            mTextDegreeBoldPaint.setTextSize(weatherTextSize);
-            mTextDegreeLightPaint.setTextSize(weatherTextSize);
-        }
-
-        @Override
         public void onPropertiesChanged(Bundle properties) {
             super.onPropertiesChanged(properties);
             mLowBitAmbient = properties.getBoolean(PROPERTY_LOW_BIT_AMBIENT, false);
@@ -311,6 +313,13 @@ public class MyWatchFace extends CanvasWatchFaceService {
             WEATHER_IMAGE_CHANGED = false;
         }
 
+
+        /**
+         * Each cycle of the watch face is drawn using this method.
+         *
+         * @param canvas
+         * @param bounds
+         */
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
             // Draw the background.
@@ -439,6 +448,9 @@ public class MyWatchFace extends CanvasWatchFaceService {
         }
     }
 
+    /**
+     * Background process to request weather update from the phone app.
+     */
     private class LoadNodeList extends AsyncTask<Void, Void, Void> {
 
         private static final String TAG = "LoadNodeList";
@@ -453,8 +465,6 @@ public class MyWatchFace extends CanvasWatchFaceService {
         protected Void doInBackground(Void... voids) {
             NodeApi.GetConnectedNodesResult nodes =
                     Wearable.NodeApi.getConnectedNodes(mApiClient).await();
-
-            Log.e(TAG, "Calling nodes.");
 
             for (Node node : nodes.getNodes()) {
                 Log.e(TAG, "Calling node# " + node.getId() + " - "  + node.getDisplayName());

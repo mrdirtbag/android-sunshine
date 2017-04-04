@@ -49,7 +49,6 @@ public class WeatherListenerService extends WearableListenerService
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-        //mGoogleApiClient.connect();
 
     }
 
@@ -160,6 +159,7 @@ public class WeatherListenerService extends WearableListenerService
                 editor.commit();
 
 
+                // notify watch to update display
                 synchronized (editor) {
                     editor.notify();
                 }
