@@ -1,3 +1,6 @@
+# Android Developer Nanodegree - Project GoUbiquitous
+## Demonstrates building a watch app to show app updates on a wear device.
+
 Initial start from: https://github.com/udacity/ud851-Sunshine
 
 ##Rubric
