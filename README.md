@@ -1,5 +1,11 @@
+[//]: # (Image References)
+
+[image1]: ./images/Sunshine.png "Sunshine Screenshot"
+
 # Android Developer Nanodegree - Project GoUbiquitous
 ## Demonstrates building a watch app to show app updates on a wear device.
+
+![Sunshine Screenshot][image1]
 
 Initial start from: https://github.com/udacity/ud851-Sunshine
 
